@@ -2,7 +2,7 @@
 
 Interactive companion to the microbiome–immune model with cumulative inflammatory memory.
 
-% **Live page:** https://moeinkh88.github.io/CODE_microbiome_immune_ODE/
+**Live page:** https://moeinkh88.github.io/CODE_microbiome_immune_ODE/
 
 The full model (m, i, h) is autonomous, so its saddle S is one fixed point in 3-D.
 The saddle that moves is the saddle of the 2-D (m, i) landscape with memory frozen at the
