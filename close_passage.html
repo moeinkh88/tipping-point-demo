@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Same present, different future: hidden memory decides</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,500;1,400&display=swap" rel="stylesheet">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f7f8fa;
+    --panel: #ffffff;
+    --ink: #1c2230;
+    --muted: #5d6676;
+    --line: #dde1e8;
+    --grid: #eceef2;
+    --subject: #222222;
+    --high: #C0392B;
+    --low: #2471A3;
+    --similar: #F2C14E;
+    --saddle: #c026d3;
+    --valley: #13a9bd;
+    --valley-ink: #0f7f8f;
+    --memory: #6a3d9a;
+    --outflow: #9a6a3d;
+    --fixed: #1c2230;
+    --focus: #2f6fdf;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #12151b;
+      --panel: #1a1e26;
+      --ink: #e6e9ef;
+      --muted: #9aa3b2;
+      --line: #2c323d;
+      --grid: #252a33;
+      --subject: #e6e9ef;
+      --high: #ff6b5b;
+      --low: #5aa9e6;
+      --similar: #d9a93a;
+      --saddle: #e05cf0;
+      --valley: #3cc8da;
+      --valley-ink: #6fdbe8;
+      --memory: #a37ad6;
+      --outflow: #c99a6a;
+      --fixed: #e6e9ef;
+      --focus: #7aa7ff;
+    }
+  }
+  :root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  *, *::before, *::after { box-sizing: inherit; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: 15px; line-height: 1.5;
+  }
+  header { max-width: 1400px; margin: 0 auto; padding: 28px 24px 8px; }
+  h1 {
+    font-family: "IBM Plex Serif", Georgia, serif; font-weight: 500;
+    font-size: clamp(1.6rem, 2.6vw, 2.2rem); line-height: 1.15; margin: 0 0 10px;
+  }
+  .lede { max-width: 78ch; color: var(--muted); margin: 0; }
+  .lede b { color: var(--ink); font-weight: 600; }
+  .layout {
+    max-width: 1400px; margin: 0 auto; padding: 16px 24px 40px;
+    display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 24px; align-items: start;
+  }
+  aside {
+    position: sticky; top: calc(12px + env(safe-area-inset-top, 0px));
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 16px 8px;
+  }
+  fieldset { border: 0; margin: 0 0 14px; padding: 0 0 12px; border-bottom: 1px solid var(--line); }
+  fieldset:last-of-type { border-bottom: 0; }
+  legend { font-weight: 600; font-size: 0.95rem; padding: 0; margin-bottom: 6px; }
+  .hint { color: var(--muted); font-size: 0.82rem; margin: 2px 0 8px; }
+  .row { display: grid; grid-template-columns: 74px 1fr 76px; gap: 8px; align-items: center; margin: 6px 0; }
+  .row label { font-size: 0.88rem; }
+  input[type=range] { width: 100%; accent-color: var(--memory); }
+  input[type=number] {
+    width: 100%; font: inherit; font-size: 0.85rem; padding: 3px 5px;
+    background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .buttons { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }
+  button {
+    font: inherit; font-size: 0.82rem; padding: 5px 9px; cursor: pointer;
+    background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px;
+  }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .check { display: flex; gap: 8px; align-items: center; font-size: 0.88rem; margin: 6px 0; }
+  .status { font-size: 0.82rem; color: var(--muted); font-variant-numeric: tabular-nums; margin: 4px 0 10px; }
+  .status b { color: var(--ink); font-weight: 600; }
+
+  .scrubber {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 18px; display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center;
+    margin-bottom: 16px;
+  }
+  .scrubber input[type=range] { accent-color: var(--subject); height: 28px; }
+  .clock { font-variant-numeric: tabular-nums; min-width: 230px; text-align: right; }
+  .clock .t { font-family: "IBM Plex Serif", Georgia, serif; font-size: 1.5rem; }
+  .clock .fate { display: block; font-size: 0.85rem; color: var(--muted); }
+  #play { min-width: 74px; font-size: 0.92rem; padding: 7px 12px; }
+
+  .note {
+    border-left: 3px solid var(--saddle); background: var(--panel); padding: 8px 12px;
+    margin: 0 0 16px; font-size: 0.9rem; display: none;
+  }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px 12px; }
+  figure h2 { font-size: 1rem; font-weight: 600; margin: 2px 4px 0; }
+  .plot { width: 100%; height: 420px; }
+  .plot.half { height: 205px; }
+  figcaption { color: var(--muted); font-size: 0.86rem; margin: 6px 4px 0; max-width: 72ch; }
+  figcaption .k { font-weight: 600; }
+  .k-subject { color: var(--subject); } .k-saddle { color: var(--saddle); }
+  .k-valley { color: var(--valley-ink); } .k-fixed { color: var(--fixed); }
+  .k-memory { color: var(--memory); } .k-outflow { color: var(--outflow); }
+  footer { max-width: 1400px; margin: 0 auto; padding: 0 24px 32px; color: var(--muted); font-size: 0.82rem; }
+
+  @media (max-width: 1000px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { position: static; }
+    .grid { grid-template-columns: 1fr; }
+    .scrubber { grid-template-columns: auto 1fr; }
+    .clock { grid-column: 1 / -1; text-align: left; min-width: 0; }
+  }
+  section { margin-bottom: 26px; }
+  section > h2 { font-family: "IBM Plex Serif", Georgia, serif; font-weight: 500; font-size: 1.3rem; margin: 4px 0 6px; }
+  .readout { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px;
+             margin: 0 0 12px; font-size: 0.92rem; max-width: 110ch; }
+  .readout b { font-weight: 600; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .plot.short { height: 300px; }
+  #busy { color: var(--muted); font-size: 0.82rem; min-height: 1.2em; }
+  @media (max-width: 1000px) { .grid3 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Same present, different future</h1>
+  <p class="lede">
+    Interactive companion to the paper. Microbial dysbiosis <b>m</b> and immune dysregulation <b>i</b> can be
+    measured; inflammatory memory <b>h</b> is hidden. Section 1 follows two subjects whose insults put them just
+    beyond and just short of their tipping size: for a while they look the same, then they go to opposite states.
+    Section 2 shows a subject who looks recovered but is still vulnerable to a second insult.
+    Change the feedback strengths and the memory half-life to see when memory sets these time scales.
+  </p>
+</header>
+
+<div class="layout">
+  <aside aria-label="Settings">
+    <fieldset>
+      <legend>Feedback strengths</legend>
+      <p class="hint">Above 1, that feedback alone makes the model bistable.</p>
+      <div class="row"><label for="gmi">G<sub>mi</sub></label><input type="range" id="gmi" min="0" max="2" step="0.01"><input type="number" id="gmi_n" min="0" max="2" step="0.01"></div>
+      <div class="row"><label for="gh">G<sub>h</sub></label><input type="range" id="gh" min="0" max="4" step="0.01"><input type="number" id="gh_n" min="0" max="4" step="0.01"></div>
+      <div class="buttons">
+        <button data-g="0.25,3.0">Main text (memory-gated)</button>
+        <button data-g="1.3,0.9">Directly gated</button>
+        <button data-g="1.3,0">No memory</button>
+      </div>
+      <p class="status" id="gating"></p>
+    </fieldset>
+    <fieldset>
+      <legend>Memory half-life</legend>
+      <p class="hint">Time after which memory has lost half of an insult. Changing it does not move the equilibria.</p>
+      <div class="row"><label for="halfLife">days</label><input type="range" id="halfLife" min="0" max="3" step="0.01"><input type="number" id="halfLife_n" min="1" max="1000" step="1"></div>
+      <div class="buttons">
+        <button data-hl="346.6">347 d (main text)</button>
+        <button data-hl="35">35 d</button>
+        <button data-hl="2">2 d</button>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>1. Two subjects</legend>
+      <p class="hint">Each insult is placed a fraction δ beyond (subject 1) or short of (subject 2) its own tipping size.</p>
+      <div class="row"><label for="logDelta">δ</label><input type="range" id="logDelta" min="-4" max="-1" step="0.5"><span class="status" id="delta_v"></span></div>
+    </fieldset>
+    <fieldset>
+      <legend>2. Second insult</legend>
+      <div class="row"><label for="frac">size</label><input type="range" id="frac" min="0.3" max="0.99" step="0.01"><input type="number" id="frac_n" min="0.3" max="0.99" step="0.01"></div>
+      <p class="hint">Size of each insult, as a fraction of A*, the smallest single insult that tips.</p>
+      <div class="row"><label for="gap">days</label><input type="range" id="gap" min="0" max="3000" step="5"><input type="number" id="gap_n" min="0" max="3000" step="5"></div>
+      <p class="hint">Time between the two insults.</p>
+    </fieldset>
+    <p id="busy"></p>
+  </aside>
+
+  <main>
+    <section>
+      <h2>1. Same present, different future</h2>
+      <p class="readout" id="read1"></p>
+      <div class="grid3">
+        <figure><div class="plot short" id="p1"></div>
+          <figcaption>Distance between the two subjects in (m, i). Shading: they look the same.</figcaption></figure>
+        <figure><div class="plot short" id="p2"></div>
+          <figcaption>Immune dysregulation, what is measured. Red: towards the high-dysregulation state; blue: back to the low-dysregulation state.</figcaption></figure>
+        <figure><div class="plot short" id="p3"></div>
+          <figcaption>Memory, which is not measured. The small difference in memory decides the outcome.</figcaption></figure>
+      </div>
+    </section>
+    <section>
+      <h2>2. Looking recovered is not being recovered</h2>
+      <p class="readout" id="read2"></p>
+      <div class="grid">
+        <figure><div class="plot short" id="p4"></div>
+          <figcaption>Immune dysregulation for one insult (grey), two insults (red) and two insults with memory reset to zero just before the second (blue dashed). Vertical lines: the insults.</figcaption></figure>
+        <figure><div class="plot short" id="p5"></div>
+          <figcaption>Memory for the same three subjects. The difference between them is held in memory.</figcaption></figure>
+      </div>
+    </section>
+  </main>
+</div>
+<footer>
+  Model (Eq. 1 of the paper, symmetric parameters): dm/dt = −α m + β Φ(i) + η Φ<sub>h</sub>(h),
+  di/dt = −α i + β Φ(m) + η Φ<sub>h</sub>(h), dh/dt = γ(m + i) − ε h, with α = 0.05 per day, K = 0.40, n = 3,
+  K<sub>h</sub> = 0.38, n<sub>h</sub> = 4, c = 2γ/ε = 1; β and η are set from the feedback strengths
+  G<sub>mi</sub> and G<sub>h</sub>, and ε from the memory half-life. The parameters are illustrative, not estimates.
+  Insult directions as in the paper; similarity threshold θ = 0.25. Integrated in the browser (RK4).
+</footer>
+<script>
+"use strict";
+// ================================================================== model ====
+// Symmetric main-text model (Eq. 1 of the paper), as in tipping_point.html.
+const ALPHA = 0.05, K = 0.40, N = 3, KH = 0.38, NH = 4, C = 1.0;
+const RHO_C = N / Math.pow(N - 1, (N - 1) / N);
+const ETA_C = ALPHA * NH * KH / (C * Math.pow(NH - 1, (NH - 1) / NH));
+const THETA = 0.25;                                   // similarity threshold
+const D1 = [1.95, 8.65], D2 = [5.40, 5.05];           // insult directions (main text)
+
+function hill(z, k, n) { if (z <= 0) return 0; const r = Math.pow(z / k, n); return r / (1 + r); }
+function dhill(z, k, n) {                             // derivative of the Hill function
+  if (z <= 0) return 0;
+  const zn = Math.pow(z, n), kn = Math.pow(k, n);
+  return n * kn * Math.pow(z, n - 1) / ((kn + zn) * (kn + zn));
+}
+function makeParams(s) {
+  const eps = Math.LN2 / s.halfLife;
+  return { a: ALPHA, b: s.gmi * RHO_C * ALPHA * K, eta: s.gh * ETA_C, eps, gam: eps * C / 2 };
+}
+function rhs(P, m, i, h) {
+  const Hh = P.eta * hill(h, KH, NH);
+  return [-P.a * m + P.b * hill(i, K, N) + Hh,
+          -P.a * i + P.b * hill(m, K, N) + Hh,
+          P.gam * (m + i) - P.eps * h];
+}
+function rk4(P, z, dt) {
+  const k1 = rhs(P, z[0], z[1], z[2]);
+  const k2 = rhs(P, z[0] + 0.5 * dt * k1[0], z[1] + 0.5 * dt * k1[1], z[2] + 0.5 * dt * k1[2]);
+  const k3 = rhs(P, z[0] + 0.5 * dt * k2[0], z[1] + 0.5 * dt * k2[1], z[2] + 0.5 * dt * k2[2]);
+  const k4 = rhs(P, z[0] + dt * k3[0], z[1] + dt * k3[1], z[2] + dt * k3[2]);
+  return [0, 1, 2].map(j => z[j] + dt / 6 * (k1[j] + 2 * k2[j] + 2 * k3[j] + k4[j]));
+}
+function stepSize(P) { return Math.min(0.5, 0.3 / (P.eps + 0.1)); }
+function zeros(f, uMax, nGrid = 3000) {
+  const up = [], down = [];
+  let u0 = 1e-9, f0 = f(u0);
+  if (f0 <= 0 && f(0) >= 0) down.push(0);
+  for (let k = 1; k <= nGrid; k++) {
+    const u1 = uMax * k / nGrid, f1 = f(u1);
+    if ((f0 < 0) !== (f1 < 0)) {
+      let lo = u0, hi = u1, flo = f0;
+      for (let it = 0; it < 50; it++) {
+        const mid = 0.5 * (lo + hi), fm = f(mid);
+        if ((fm < 0) === (flo < 0)) { lo = mid; flo = fm; } else hi = mid;
+      }
+      (f0 < 0 ? up : down).push(0.5 * (lo + hi));
+    }
+    u0 = u1; f0 = f1;
+  }
+  return { up, down };
+}
+function uLimit(P) { return 1.5 * (P.b + P.eta) / P.a + 0.5; }
+function fullEquilibria(P) {
+  const z = zeros(u => -P.a * u + P.b * hill(u, K, N) + P.eta * hill(C * u, KH, NH), uLimit(P));
+  if (!z.up.length) return null;
+  const uS = z.up[0];
+  const high = z.down.filter(u => u > uS);
+  return { uS, hS: C * uS, uHigh: high.length ? high[high.length - 1] : NaN };
+}
+// gating and escape rate at the saddle (Methods of the paper, symmetric case)
+function saddleRates(P, E) {
+  const a = P.b * dhill(E.uS, K, N) - P.a;            // growth of the (m, i) block, memory held fixed
+  const k = P.eta * dhill(C * E.uS, KH, NH);           // sensitivity of m and i to memory
+  const e = P.eps;
+  const lam = 0.5 * ((a - e) + Math.sqrt((a - e) * (a - e) + 4 * e * (a + C * k)));
+  return { a, k, lam, memoryGated: a < 0 };
+}
+function simulate(P, z0, T, dtMax) {
+  const dt = Math.min(stepSize(P), dtMax || Infinity), n = Math.max(1, Math.ceil(T / dt));
+  const t = new Float64Array(n + 1), m = new Float64Array(n + 1),
+        i = new Float64Array(n + 1), h = new Float64Array(n + 1);
+  let z = z0.slice();
+  t[0] = 0; m[0] = z[0]; i[0] = z[1]; h[0] = z[2];
+  for (let q = 1; q <= n; q++) {
+    const d = T / n;
+    z = rk4(P, z, d);
+    t[q] = q * d; m[q] = z[0]; i[q] = z[1]; h[q] = z[2];
+  }
+  return { t, m, i, h };
+}
+// the model is cooperative: below S in every component -> low-dysregulation state, above -> high
+function committed(z, E) {
+  if (z[0] > E.uS && z[1] > E.uS && z[2] > E.hS) return 1;
+  if (z[0] < E.uS && z[1] < E.uS && z[2] < E.hS) return -1;
+  return 0;
+}
+function fate(P, E, z0, tMax = 60000) {
+  const dt = stepSize(P);
+  let z = z0.slice(), t = 0, c = committed(z, E);
+  while (c === 0 && t < tMax) { z = rk4(P, z, dt); t += dt; c = committed(z, E); }
+  return { c: c === 0 ? (z[0] + z[1] > 2 * E.uS ? 1 : -1) : c, t };
+}
+// smallest insult size A along dir (memory h0 at the start) that tips the subject
+function tippingSize(P, E, dir, h0, relTol) {
+  const goesHigh = A => fate(P, E, [A * dir[0], A * dir[1], h0]).c === 1;
+  if (goesHigh(0)) return NaN;
+  let lo = 0, hi = 2 * E.uS;
+  while (!goesHigh(hi)) { lo = hi; hi *= 2; if (hi > 1e4) return NaN; }
+  while (hi - lo > relTol * hi) { const mid = 0.5 * (lo + hi); if (goesHigh(mid)) hi = mid; else lo = mid; }
+  return 0.5 * (lo + hi);
+}
+const unit = d => { const r = Math.hypot(d[0], d[1]); return [d[0] / r, d[1] / r]; };
+
+// ------------------------------------------------ section 1: two subjects ----
+function twoSubjects(P, E, delta) {
+  const d1 = unit(D1), d2 = unit(D2);
+  const A1 = tippingSize(P, E, d1, 0, delta / 20), A2 = tippingSize(P, E, d2, 0, delta / 20);
+  if (!Number.isFinite(A1) || !Number.isFinite(A2)) return null;
+  const z1 = [A1 * (1 + delta) * d1[0], A1 * (1 + delta) * d1[1], 0];
+  const z2 = [A2 * (1 - delta) * d2[0], A2 * (1 - delta) * d2[1], 0];
+  const f1 = fate(P, E, z1), f2 = fate(P, E, z2);
+  // run until the two subjects have clearly separated (distance in (m, i) above 3 x threshold)
+  const dist = (s1, s2, q) => Math.sqrt(0.5 * (((s1.m[q] - s2.m[q]) / E.uS) ** 2 + ((s1.i[q] - s2.i[q]) / E.uS) ** 2));
+  let T = Math.max(600, 1.6 * Math.max(f1.t, f2.t) + 200), s1, s2;
+  for (;;) {
+    s1 = simulate(P, z1, T); s2 = simulate(P, z2, T);
+    if (dist(s1, s2, s1.t.length - 1) > 3 * THETA || T > 15000) break;
+    T *= 1.5;
+  }
+  const n = s1.t.length, dt = s1.t[1] - s1.t[0];
+  const D = new Float64Array(n), D3 = new Float64Array(n);
+  let duration = 0, width = Infinity, tClose = 0, best = [0, 0], cur = null;
+  for (let q = 0; q < n; q++) {
+    const dm = (s1.m[q] - s2.m[q]) / E.uS, di = (s1.i[q] - s2.i[q]) / E.uS, dh = (s1.h[q] - s2.h[q]) / E.hS;
+    D[q] = Math.sqrt(0.5 * (dm * dm + di * di));
+    D3[q] = Math.sqrt((dm * dm + di * di + dh * dh) / 3);
+    if (D3[q] < width) { width = D3[q]; tClose = s1.t[q]; }
+    if (D[q] < THETA) {
+      duration += dt;
+      if (cur === null) cur = s1.t[q];
+      if (s1.t[q] - cur > best[1] - best[0]) best = [cur, s1.t[q]];
+    } else cur = null;
+  }
+  return { s1, s2, D, D3, duration, width, tClose, window: best, fates: [f1.c, f2.c], T };
+}
+
+// ------------------------------------------- section 2: second insult --------
+function concatRuns(a, b, t0) {
+  const n = a.t.length + b.t.length - 1, out = { t: new Float64Array(n), m: new Float64Array(n),
+                                                 i: new Float64Array(n), h: new Float64Array(n) };
+  for (const key of ["t", "m", "i", "h"]) {
+    out[key].set(a[key], 0);
+    for (let q = 1; q < b.t.length; q++) out[key][a.t.length - 1 + q] = key === "t" ? t0 + b.t[q] : b[key][q];
+  }
+  return out;
+}
+function secondInsult(P, E, A, gap, T) {
+  const first = simulate(P, [A, A, 0], gap, 0.5);
+  const z = [first.m[first.m.length - 1], first.i[first.i.length - 1], first.h[first.h.length - 1]];
+  const two = [z[0] + A, z[1] + A, z[2]], reset = [z[0] + A, z[1] + A, 0];
+  const zeroRun = simulate(P, [0, 0, 0], gap, 0.5);
+  return {
+    two: concatRuns(first, simulate(P, two, T - gap, 0.5), gap),
+    reset: concatRuns(first, simulate(P, reset, T - gap, 0.5), gap),
+    one: concatRuns(zeroRun, simulate(P, [A, A, 0], T - gap, 0.5), gap),
+    tips: { two: fate(P, E, two).c === 1, reset: fate(P, E, reset).c === 1, one: fate(P, E, [A, A, 0]).c === 1 },
+  };
+}
+// time until m and i stay below `limit` x their high-dysregulation value after one insult
+function looksRecovered(P, E, A, limit) {
+  const s = simulate(P, [A, A, 0], 6000, 0.5);
+  let last = 0;
+  for (let q = 0; q < s.t.length; q++) if (Math.max(s.m[q], s.i[q]) > limit * E.uHigh) last = s.t[q];
+  return last;
+}
+// memory window: the longest time between two insults of size A for which the second still tips
+function memoryWindow(P, E, A) {
+  const tips = g => {
+    const s = simulate(P, [A, A, 0], g, 0.5);
+    const n = s.t.length - 1;
+    return fate(P, E, [s.m[n] + A, s.i[n] + A, s.h[n]]).c === 1;
+  };
+  if (!tips(0)) return 0;
+  let lo = 0, hi = 50;
+  while (tips(hi)) { lo = hi; hi *= 2; if (hi > 40000) return Infinity; }
+  while (hi - lo > 2) { const mid = 0.5 * (lo + hi); if (tips(mid)) lo = mid; else hi = mid; }
+  return lo;
+}
+if (typeof module !== "undefined") module.exports = { makeParams, fullEquilibria, saddleRates, twoSubjects,
+  tippingSize, secondInsult, looksRecovered, memoryWindow };
+
+// ================================================================== page =====
+const ST = { gmi: 0.25, gh: 3.0, halfLife: 346.6, logDelta: -3, frac: 0.8, gap: 365 };
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt = (x, d = 0) => Number.isFinite(x) ? x.toFixed(d) : "–";
+let P, E, R, TWO, ASTAR, SEC, REC, WIN;
+
+// ---- inputs: each range slider is paired with a number box
+function pair(key, toSlider, fromSlider, after) {
+  const r = $(key), n = $(key + "_n");
+  const show = () => { r.value = toSlider(ST[key]); n.value = +ST[key].toPrecision(4); };
+  r.addEventListener("input", () => { ST[key] = fromSlider(+r.value); n.value = +ST[key].toPrecision(4); after(); });
+  n.addEventListener("change", () => { const v = +n.value; if (Number.isFinite(v)) { ST[key] = v; r.value = toSlider(v); after(); } });
+  show();
+  return show;
+}
+const id = x => x;
+const shows = [
+  pair("gmi", id, id, () => schedule(true)),
+  pair("gh", id, id, () => schedule(true)),
+  pair("halfLife", Math.log10, x => Math.pow(10, x), () => schedule(true)),
+  pair("frac", id, id, () => schedule(false)),
+  pair("gap", id, id, () => schedule(false)),
+];
+$("logDelta").value = ST.logDelta;
+$("logDelta").addEventListener("input", () => { ST.logDelta = +$("logDelta").value; showDelta(); schedule(true); });
+const showDelta = () => { $("delta_v").textContent = "δ = " + Math.pow(10, ST.logDelta).toExponential(0); };
+showDelta();
+document.querySelectorAll("[data-g]").forEach(b => b.addEventListener("click", () => {
+  const [g1, g2] = b.dataset.g.split(",").map(Number); ST.gmi = g1; ST.gh = g2; shows.forEach(f => f()); schedule(true);
+}));
+document.querySelectorAll("[data-hl]").forEach(b => b.addEventListener("click", () => {
+  ST.halfLife = +b.dataset.hl; shows.forEach(f => f()); schedule(true);
+}));
+
+// ---- computation (debounced, so dragging a slider stays smooth)
+let timer = null, needAll = false;
+function schedule(all) {
+  needAll = needAll || all;
+  $("busy").textContent = "computing…";
+  clearTimeout(timer);
+  timer = setTimeout(() => { compute(needAll); needAll = false; $("busy").textContent = ""; render(); }, 120);
+}
+function compute(all) {
+  if (all) {
+    P = makeParams(ST); E = fullEquilibria(P);
+    if (!E) { R = TWO = null; return; }
+    R = saddleRates(P, E);
+    TWO = twoSubjects(P, E, Math.pow(10, ST.logDelta));
+    ASTAR = tippingSize(P, E, [1, 1], 0, 1e-4);
+  }
+  if (!E || !Number.isFinite(ASTAR)) { SEC = null; return; }
+  const A = ST.frac * ASTAR;
+  const T2 = Math.min(9000, ST.gap + Math.max(1500, 5 * ST.halfLife));
+  SEC = secondInsult(P, E, A, ST.gap, T2);
+  REC = [looksRecovered(P, E, A, 0.05), looksRecovered(P, E, A, 0.02)];
+  WIN = memoryWindow(P, E, A);
+}
+
+// ---- plotting
+function layout(xTitle, yTitle, extra = {}) {
+  const ink = css("--ink"), grid = css("--grid"), line = css("--line");
+  return Object.assign({
+    margin: { l: 62, r: 14, t: 52, b: 46 }, paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+    font: { family: "IBM Plex Sans, system-ui, sans-serif", size: 12, color: ink },
+    xaxis: { title: { text: xTitle }, gridcolor: grid, linecolor: line, zeroline: false },
+    yaxis: { title: { text: yTitle }, gridcolor: grid, linecolor: line, zeroline: false },
+    legend: { orientation: "h", y: 1.02, yanchor: "bottom", x: 0, font: { size: 11 } }, showlegend: true,
+  }, extra);
+}
+const CFG = { displayModeBar: false, responsive: true };
+const thinIdx = (n, maxPts = 1500) => { const s = Math.max(1, Math.floor(n / maxPts)), out = [];
+  for (let q = 0; q < n; q += s) out.push(q); if (out[out.length - 1] !== n - 1) out.push(n - 1); return out; };
+const pick = (arr, idx) => idx.map(q => arr[q]);
+function shade(x0, x1) {
+  return x1 > x0 ? [{ type: "rect", xref: "x", yref: "paper", x0, x1, y0: 0, y1: 1,
+                      fillcolor: css("--similar"), opacity: 0.25, line: { width: 0 }, layer: "below" }] : [];
+}
+
+function render() {
+  const msg = $("gating");
+  if (!E) {
+    msg.innerHTML = "<b>Monostable:</b> with these feedback strengths there is only the low-dysregulation state.";
+    ["p1", "p2", "p3", "p4", "p5"].forEach(k => Plotly.purge($(k)));
+    $("read1").textContent = ""; $("read2").textContent = "";
+    return;
+  }
+  msg.innerHTML = R.memoryGated
+    ? `<b>Memory-gated.</b> With memory held fixed, m and i have no tipping point at the saddle: the
+       outcome is decided by memory. Escape time from the saddle 1/λ<sub>+</sub> = <b>${fmt(1 / R.lam)} days</b>;
+       it grows with the memory half-life.`
+    : `<b>Directly gated.</b> The microbiome–immune interaction can tip by itself at the saddle.
+       Escape time 1/λ<sub>+</sub> = <b>${fmt(1 / R.lam)} days</b>; it hardly depends on the memory half-life.`;
+  const hi = css("--high"), lo = css("--low"), mem = css("--memory"), mut = css("--muted");
+  // ---- section 1
+  if (TWO) {
+    const idx = thinIdx(TWO.s1.t.length), t = pick(TWO.s1.t, idx);
+    const [c1, c2] = TWO.fates.map(f => f === 1 ? hi : lo);
+    const sh = shade(TWO.window[0], TWO.window[1]);
+    Plotly.react($("p1"), [
+      { x: t, y: pick(TWO.D, idx), mode: "lines", line: { color: mut, width: 2 }, name: "distance in (m, i)" },
+      { x: [0, t[t.length - 1]], y: [THETA, THETA], mode: "lines", line: { color: css("--ink"), width: 1, dash: "dot" },
+        name: "similarity threshold" },
+    ], layout("time (days)", "distance between the subjects<br>(relative to the saddle)",
+              { yaxis: { type: "log", title: { text: "distance between the subjects<br>(relative to the saddle)" },
+                         tickvals: [0.001, 0.01, 0.1, 1, 10], ticktext: ["0.001", "0.01", "0.1", "1", "10"],
+                         gridcolor: css("--grid"), linecolor: css("--line") }, shapes: sh }), CFG);
+    const sub = (s, key, c, dash, name) => ({ x: t, y: pick(s[key], idx), mode: "lines", name,
+                                              line: { color: c, width: 2, dash } });
+    Plotly.react($("p2"), [sub(TWO.s1, "i", c1, "solid", "subject 1"), sub(TWO.s2, "i", c2, "dash", "subject 2")],
+      layout("time (days)", "immune dysregulation i", { shapes: sh }), CFG);
+    Plotly.react($("p3"), [sub(TWO.s1, "h", c1, "solid", "subject 1"), sub(TWO.s2, "h", c2, "dash", "subject 2"),
+      { x: [0, t[t.length - 1]], y: [E.hS, E.hS], mode: "lines", line: { color: mem, width: 1, dash: "dot" },
+        name: "memory at the saddle, h<sub>S</sub>" }],
+      layout("time (days)", "memory h (hidden)", { shapes: sh }), CFG);
+    $("read1").innerHTML = TWO.duration > 0
+      ? `The two subjects look the same (distance in m and i below the threshold) from day
+         <b>${fmt(TWO.window[0])}</b> to day <b>${fmt(TWO.window[1])}</b>: duration of the close passage
+         <b>${fmt(TWO.duration)} days</b>. Their closest distance in (m, i, h) is <b>${TWO.width.toFixed(4)}</b>
+         of the saddle level, on day ${fmt(TWO.tClose)}. Subject 1 ends in the
+         ${TWO.fates[0] === 1 ? "high" : "low"}-dysregulation state, subject 2 in the
+         ${TWO.fates[1] === 1 ? "high" : "low"}-dysregulation state.`
+      : "The two subjects never come within the similarity threshold of each other.";
+  }
+  // ---- section 2
+  if (SEC) {
+    const idx = thinIdx(SEC.two.t.length), t = pick(SEC.two.t, idx);
+    const run = (r, key, c, w, dash, name) => ({ x: t, y: pick(r[key], idx), mode: "lines", name,
+                                                 line: { color: c, width: w, dash } });
+    const marks = [0, ST.gap].map(x => ({ type: "line", xref: "x", yref: "paper", x0: x, x1: x, y0: 0, y1: 1,
+                                         line: { color: css("--line"), width: 1 } }));
+    const lim = 0.05 * E.uHigh, T = t[t.length - 1];
+    Plotly.react($("p4"), [
+      run(SEC.one, "i", mut, 5, "solid", `one insult (day ${fmt(ST.gap)})`),
+      run(SEC.reset, "i", lo, 2, "dash", "two insults, memory reset before the second"),
+      run(SEC.two, "i", hi, 2, "solid", "insults on day 0 and day " + fmt(ST.gap)),
+      { x: [0, T], y: [lim, lim], mode: "lines", line: { color: css("--ink"), width: 1, dash: "dot" },
+        name: "detection limit (5%)" },
+    ], layout("time (days)", "immune dysregulation i", { shapes: marks, margin: { l: 62, r: 14, t: 78, b: 46 },
+             legend: { orientation: "h", y: 1.02, yanchor: "bottom", x: 0, font: { size: 11 } } }), CFG);
+    Plotly.react($("p5"), [
+      run(SEC.one, "h", mut, 5, "solid", "one insult"),
+      run(SEC.reset, "h", lo, 2, "dash", "memory reset"),
+      run(SEC.two, "h", hi, 2, "solid", "two insults"),
+      { x: [0, T], y: [E.hS, E.hS], mode: "lines", line: { color: mem, width: 1, dash: "dot" }, name: "h<sub>S</sub>" },
+    ], layout("time (days)", "memory h (hidden)", { shapes: marks, showlegend: false, margin: { l: 62, r: 14, t: 78, b: 46 } }), CFG);
+    const A = ST.frac * ASTAR;
+    const winTxt = Number.isFinite(WIN) ? `${fmt(WIN)} days` : "longer than 40 000 days";
+    $("read2").innerHTML =
+      `Each insult moves m and i by <b>${A.toFixed(2)}</b> (${ST.frac.toFixed(2)} × A*, where A* = ${ASTAR.toFixed(2)}
+       is the smallest single insult that tips). After one insult the subject <b>looks recovered</b> after
+       <b>${fmt(REC[0])}–${fmt(REC[1])} days</b> (m and i below 5–2% of the high-dysregulation level).
+       A second insult on day ${fmt(ST.gap)} <b>${SEC.tips.two ? "tips" : "does not tip"}</b> the subject;
+       with memory reset before it, it <b>${SEC.tips.reset ? "still tips" : "does not tip"}</b>.
+       <b>Memory window Δ* = ${winTxt}</b>: a second identical insult tips the subject if it comes within this time.`;
+  }
+}
+compute(true);
+render();
+
+</script>
+</body>
+</html>

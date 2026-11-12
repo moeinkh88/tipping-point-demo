@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Where the tipping point lies: memory held fixed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,500;1,400&display=swap" rel="stylesheet">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f7f8fa;
+    --panel: #ffffff;
+    --ink: #1c2230;
+    --muted: #5d6676;
+    --line: #dde1e8;
+    --grid: #eceef2;
+    --subject: #222222;
+    --saddle: #C0392B;
+    --valley: #1D9E75;
+    --valley-ink: #157a5b;
+    --memory: #6a3d9a;
+    --outflow: #9a6a3d;
+    --fixed: #1c2230;
+    --focus: #2f6fdf;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #12151b;
+      --panel: #1a1e26;
+      --ink: #e6e9ef;
+      --muted: #9aa3b2;
+      --line: #2c323d;
+      --grid: #252a33;
+      --subject: #e6e9ef;
+      --saddle: #ff6b5b;
+      --valley: #3cc8a0;
+      --valley-ink: #6fe0bd;
+      --memory: #a37ad6;
+      --outflow: #c99a6a;
+      --fixed: #e6e9ef;
+      --focus: #7aa7ff;
+    }
+  }
+  :root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  *, *::before, *::after { box-sizing: inherit; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: 15px; line-height: 1.5;
+  }
+  header { max-width: 1400px; margin: 0 auto; padding: 28px 24px 8px; }
+  h1 {
+    font-family: "IBM Plex Serif", Georgia, serif; font-weight: 500;
+    font-size: clamp(1.6rem, 2.6vw, 2.2rem); line-height: 1.15; margin: 0 0 10px;
+  }
+  .lede { max-width: 78ch; color: var(--muted); margin: 0; }
+  .lede b { color: var(--ink); font-weight: 600; }
+  .layout {
+    max-width: 1400px; margin: 0 auto; padding: 16px 24px 40px;
+    display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 24px; align-items: start;
+  }
+  aside {
+    position: sticky; top: calc(12px + env(safe-area-inset-top, 0px));
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 16px 8px;
+  }
+  fieldset { border: 0; margin: 0 0 14px; padding: 0 0 12px; border-bottom: 1px solid var(--line); }
+  fieldset:last-of-type { border-bottom: 0; }
+  legend { font-weight: 600; font-size: 0.95rem; padding: 0; margin-bottom: 6px; }
+  .hint { color: var(--muted); font-size: 0.82rem; margin: 2px 0 8px; }
+  .row { display: grid; grid-template-columns: 74px 1fr 76px; gap: 8px; align-items: center; margin: 6px 0; }
+  .row label { font-size: 0.88rem; }
+  input[type=range] { width: 100%; accent-color: var(--memory); }
+  input[type=number] {
+    width: 100%; font: inherit; font-size: 0.85rem; padding: 3px 5px;
+    background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .buttons { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }
+  button {
+    font: inherit; font-size: 0.82rem; padding: 5px 9px; cursor: pointer;
+    background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px;
+  }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .check { display: flex; gap: 8px; align-items: center; font-size: 0.88rem; margin: 6px 0; }
+  .status { font-size: 0.82rem; color: var(--muted); font-variant-numeric: tabular-nums; margin: 4px 0 10px; }
+  .status b { color: var(--ink); font-weight: 600; }
+
+  .scrubber {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 18px; display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center;
+    margin-bottom: 16px;
+  }
+  .scrubber input[type=range] { accent-color: var(--subject); height: 28px; }
+  .clock { font-variant-numeric: tabular-nums; min-width: 230px; text-align: right; }
+  .clock .t { font-family: "IBM Plex Serif", Georgia, serif; font-size: 1.5rem; }
+  .clock .fate { display: block; font-size: 0.85rem; color: var(--muted); }
+  #play { min-width: 74px; font-size: 0.92rem; padding: 7px 12px; }
+
+  .note {
+    border-left: 3px solid var(--saddle); background: var(--panel); padding: 8px 12px;
+    margin: 0 0 16px; font-size: 0.9rem; display: none;
+  }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px 12px; }
+  figure h2 { font-size: 1rem; font-weight: 600; margin: 2px 4px 0; }
+  .plot { width: 100%; height: 420px; }
+  .plot.half { height: 205px; }
+  figcaption { color: var(--muted); font-size: 0.86rem; margin: 6px 4px 0; max-width: 72ch; }
+  figcaption .k { font-weight: 600; }
+  .k-subject { color: var(--subject); } .k-saddle { color: var(--saddle); }
+  .k-valley { color: var(--valley-ink); } .k-fixed { color: var(--fixed); }
+  .k-memory { color: var(--memory); } .k-outflow { color: var(--outflow); }
+  footer { max-width: 1400px; margin: 0 auto; padding: 0 24px 32px; color: var(--muted); font-size: 0.82rem; }
+
+  @media (max-width: 1000px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { position: static; }
+    .grid { grid-template-columns: 1fr; }
+    .scrubber { grid-template-columns: auto 1fr; }
+    .clock { grid-column: 1 / -1; text-align: left; min-width: 0; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Where the tipping point lies</h1>
+  <p class="lede">
+    Supplementary companion to the paper. The full model (m, i, h) has one tipping point: the saddle
+    <b>S</b>, a fixed point in three dimensions. An observer who sees only m and i sees something else:
+    the (m, i) dynamics with memory held at its current value. Memory adds the same push η·Φ<sub>h</sub>(h)
+    to dm/dt and di/dt, so each memory level gives a different landscape.
+    <b>Memory-gated</b> (main text): this landscape has a single valley at every memory level and no tipping
+    point at all; the threshold is a level of memory. <b>Directly gated</b>: the landscape has its own tipping
+    point, which memory moves. Drag the time slider and watch the four views together.
+  </p>
+</header>
+
+<div class="layout">
+  <aside aria-label="Settings">
+    <fieldset>
+      <legend>Feedback strengths</legend>
+      <p class="hint">Above 1, that feedback alone makes the model bistable.</p>
+      <div class="row"><label for="gmi">G<sub>mi</sub></label><input type="range" id="gmi" min="0" max="3" step="0.01"><input type="number" id="gmi_n" min="0" max="3" step="0.01"></div>
+      <div class="row"><label for="gh">G<sub>h</sub></label><input type="range" id="gh" min="0" max="4" step="0.01"><input type="number" id="gh_n" min="0" max="4" step="0.01"></div>
+      <div class="buttons">
+        <button data-g="0.25,3.0">Main text (memory-gated)</button>
+        <button data-g="1.3,0.9">Directly gated</button>
+        <button data-g="1.3,0">No memory</button>
+        <button data-g="1.2,1.2">Both strong</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Memory half-life</legend>
+      <p class="hint">Time after which memory has lost half of an insult (ln 2 / ε). The equilibria do not change; only how fast h follows m and i.</p>
+      <div class="row"><label for="hl">days</label><input type="range" id="hl" min="0" max="3" step="0.01"><input type="number" id="hl_n" min="1" max="1000" step="1"></div>
+      <div class="buttons">
+        <button data-hl="347">347 d (main text)</button>
+        <button data-hl="35">35 d</button>
+        <button data-hl="2">2 d</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Starting point</legend>
+      <div class="row"><label for="m0">m(0)</label><input type="range" id="m0" min="0" max="10" step="0.001"><input type="number" id="m0_n" min="0" max="10" step="any"></div>
+      <div class="row"><label for="i0">i(0)</label><input type="range" id="i0" min="0" max="10" step="0.001"><input type="number" id="i0_n" min="0" max="10" step="any"></div>
+      <div class="row"><label for="h0">h(0)</label><input type="range" id="h0" min="0" max="2" step="0.001"><input type="number" id="h0_n" min="0" max="2" step="any"></div>
+      <p class="hint">Insult direction, as in the paper:</p>
+      <div class="buttons">
+        <button data-dir="1.95,8.65">Subject 1 direction</button>
+        <button data-dir="5.40,5.05">Subject 2 direction</button>
+      </div>
+      <p class="hint">Scale the insult (keeping its direction and h(0)) to sit just beside the tipping size:</p>
+      <div class="row"><label for="delta">δ</label><input type="range" id="delta" min="-6" max="-1" step="0.5"><input type="number" id="delta_n" readonly tabindex="-1"></div>
+      <div class="buttons">
+        <button class="primary" id="above">Just above (→ high dysregulation)</button>
+        <button class="primary" id="below">Just below (→ low dysregulation)</button>
+      </div>
+      <p class="status" id="edgeStatus"></p>
+    </fieldset>
+
+    <fieldset>
+      <legend>View</legend>
+      <div class="row"><label for="tend">days</label><input type="range" id="tend" min="200" max="8000" step="50"><input type="number" id="tend_n" min="200" max="20000" step="50"></div>
+      <label class="check"><input type="checkbox" id="wide"> Zoom out to both valleys</label>
+      <p class="status" id="eqStatus"></p>
+    </fieldset>
+  </aside>
+
+  <main>
+    <div class="scrubber">
+      <button id="play" aria-label="Play or pause">Play</button>
+      <input type="range" id="time" min="0" max="1" step="0.001" value="0" aria-label="Time">
+      <div class="clock"><span class="t" id="tlabel">t = 0 d</span><span class="fate" id="fate"></span></div>
+    </div>
+    <p class="note" id="fastNote">
+      With short-lived memory, h follows m and i almost instantly. The landscape at fixed memory in A and B then
+      no longer shows where the subject really decides: the real boundary passes near the fixed saddle S.
+    </p>
+    <div class="grid">
+      <figure>
+        <h2>A. What an observer of m and i sees: the landscape at the current memory</h2>
+        <div class="plot" id="pA"></div>
+        <figcaption>
+          Nullclines at the subject’s current memory (faint: at h = 0). Memory shifts both by the same push, so
+          their crossings move. A middle crossing, if there is one, is the
+          <span class="k k-saddle">tipping point at the current memory ✕</span>. The thin <span class="k k-fixed">✕</span>
+          is the saddle S of the full model seen from above: it never moves. <span class="k k-valley">Valleys ●</span>,
+          <span class="k k-subject">subject ●</span>.
+        </figcaption>
+      </figure>
+      <figure>
+        <h2>B. Why it moves: the net rate on the diagonal m = i = u</h2>
+        <div class="plot" id="pB"></div>
+        <figcaption>
+          du/dt = −α·u + β·Φ(u) + η·Φ<sub>h</sub>(h). Above zero u grows, below zero it shrinks; the zeros are
+          the valleys and the tipping point. Memory adds the same number at every u, lifting the whole curve, so
+          the zeros slide. When the curve lifts off, the tipping point is gone. In the memory-gated case the curve
+          has only one zero at every memory level.
+        </figcaption>
+      </figure>
+      <figure>
+        <h2>C. How h moves: dh/dt = inflow − outflow</h2>
+        <div class="plot half" id="pC1"></div>
+        <div class="plot half" id="pC2"></div>
+        <figcaption>
+          <span class="k k-memory">Inflow γ<sub>m</sub>·m + γ<sub>i</sub>·i</span> writes memory,
+          <span class="k k-outflow">outflow ε·h</span> forgets it. h rises while inflow is larger.
+          Only at h = h<sub>S</sub> does the tipping point at the current memory sit exactly on S.
+        </figcaption>
+      </figure>
+      <figure>
+        <h2>D. The map: every landscape at once</h2>
+        <div class="plot" id="pD"></div>
+        <figcaption>
+          For each memory level: its <span class="k k-valley">valleys</span> and its
+          <span class="k k-saddle">tipping point</span>. These curves are fixed. Only the dashed line, the subject’s
+          current memory, moves; the tipping point at the current memory is where that line crosses the red curve.
+          S is where these curves meet the line on which h stops changing.
+        </figcaption>
+      </figure>
+    </div>
+  </main>
+</div>
+<footer>
+  Model: dm/dt = −α m + β Φ(i) + η Φ<sub>h</sub>(h), di/dt = −α i + β Φ(m) + η Φ<sub>h</sub>(h),
+  dh/dt = γ(m + i) − ε h, with α = 0.05, K = 0.40, n = 3, K<sub>h</sub> = 0.38, n<sub>h</sub> = 4, c = 2γ/ε = 1.
+  β and η are set from the feedback strengths G<sub>mi</sub> and G<sub>h</sub> (Methods of the paper).
+  Symmetric, illustrative parameters. Integrated in the browser with RK4.
+</footer>
+
+<script>
+"use strict";
+// ------------------------------------------------------------------ model ----
+const ALPHA = 0.05, K = 0.40, N = 3, KH = 0.38, NH = 4, C = 1.0;
+const RHO_C = N / Math.pow(N - 1, (N - 1) / N);
+const ETA_C = ALPHA * NH * KH / (C * Math.pow(NH - 1, (NH - 1) / NH));
+
+function hill(z, k, n) { if (z <= 0) return 0; const r = Math.pow(z / k, n); return r / (1 + r); }
+
+function makeParams(s) {
+  const eps = Math.LN2 / s.halfLife;
+  return { a: ALPHA, b: s.gmi * RHO_C * ALPHA * K, eta: s.gh * ETA_C, eps, gam: eps * C / 2 };
+}
+function rhs(P, m, i, h) {
+  const Hh = P.eta * hill(h, KH, NH);
+  return [-P.a * m + P.b * hill(i, K, N) + Hh,
+          -P.a * i + P.b * hill(m, K, N) + Hh,
+          P.gam * (m + i) - P.eps * h];
+}
+function rk4(P, z, dt) {
+  const k1 = rhs(P, z[0], z[1], z[2]);
+  const k2 = rhs(P, z[0] + 0.5 * dt * k1[0], z[1] + 0.5 * dt * k1[1], z[2] + 0.5 * dt * k1[2]);
+  const k3 = rhs(P, z[0] + 0.5 * dt * k2[0], z[1] + 0.5 * dt * k2[1], z[2] + 0.5 * dt * k2[2]);
+  const k4 = rhs(P, z[0] + dt * k3[0], z[1] + dt * k3[1], z[2] + dt * k3[2]);
+  return [0, 1, 2].map(j => z[j] + dt / 6 * (k1[j] + 2 * k2[j] + 2 * k3[j] + k4[j]));
+}
+function stepSize(P) { return Math.min(0.5, 0.3 / (P.eps + 0.1)); }
+
+// zeros of f on (0, uMax]: up = crossing from below (saddle), down = from above (valley)
+function zeros(f, uMax, nGrid = 3000) {
+  const up = [], down = [];
+  let u0 = 1e-9, f0 = f(u0);
+  if (f0 <= 0 && f(0) >= 0) down.push(0);
+  for (let k = 1; k <= nGrid; k++) {
+    const u1 = uMax * k / nGrid, f1 = f(u1);
+    if ((f0 < 0) !== (f1 < 0)) {
+      let lo = u0, hi = u1, flo = f0;
+      for (let it = 0; it < 50; it++) {
+        const mid = 0.5 * (lo + hi), fm = f(mid);
+        if ((fm < 0) === (flo < 0)) { lo = mid; flo = fm; } else hi = mid;
+      }
+      (f0 < 0 ? up : down).push(0.5 * (lo + hi));
+    }
+    u0 = u1; f0 = f1;
+  }
+  return { up, down };
+}
+function uLimit(P) { return 1.5 * (P.b + P.eta) / P.a + 0.5; }
+
+// equilibria of the full 3-D model: all on m = i = u, h = c u
+function fullEquilibria(P) {
+  const z = zeros(u => -P.a * u + P.b * hill(u, K, N) + P.eta * hill(C * u, KH, NH), uLimit(P));
+  if (!z.up.length) return null;
+  const uS = z.up[0];
+  const high = z.down.filter(u => u > uS);
+  return { uS, hS: C * uS, uHigh: high.length ? high[high.length - 1] : NaN };
+}
+// valleys and saddle of the (m, i) landscape with memory frozen at h
+function frozen(P, h) {
+  const push = P.eta * hill(h, KH, NH);
+  const z = zeros(u => -P.a * u + P.b * hill(u, K, N) + push, uLimit(P), 1500);
+  return { valleys: z.down, saddle: z.up.length ? z.up[0] : null, push };
+}
+
+function simulate(P, z0, T) {
+  const dt = stepSize(P), n = Math.ceil(T / dt);
+  const t = new Float64Array(n + 1), m = new Float64Array(n + 1),
+        i = new Float64Array(n + 1), h = new Float64Array(n + 1);
+  let z = z0.slice();
+  t[0] = 0; m[0] = z[0]; i[0] = z[1]; h[0] = z[2];
+  for (let k = 1; k <= n; k++) {
+    z = rk4(P, z, Math.min(dt, T - t[k - 1]));
+    t[k] = t[k - 1] + Math.min(dt, T - t[k - 1]); m[k] = z[0]; i[k] = z[1]; h[k] = z[2];
+  }
+  return { t, m, i, h };
+}
+// the model is cooperative: below S in every component -> low-dysregulation state, above -> high
+function committed(z, E) {
+  if (z[0] > E.uS && z[1] > E.uS && z[2] > E.hS) return 1;
+  if (z[0] < E.uS && z[1] < E.uS && z[2] < E.hS) return -1;
+  return 0;
+}
+function fate(P, E, z0, tMax = 60000) {
+  const dt = stepSize(P);
+  let z = z0.slice(), t = 0, c = committed(z, E);
+  while (c === 0 && t < tMax) { z = rk4(P, z, dt); t += dt; c = committed(z, E); }
+  return { c: c === 0 ? (z[0] + z[1] > 2 * E.uS ? 1 : -1) : c, t };
+}
+// time until the subject is clearly in its final valley (for choosing the view length)
+function settleTime(P, E, z0, tMax = 60000) {
+  const dt = stepSize(P);
+  let z = z0.slice(), t = 0, c = committed(z, E);
+  while (c === 0 && t < tMax) { z = rk4(P, z, dt); t += dt; c = committed(z, E); }
+  const near = z => { const u = 0.5 * (z[0] + z[1]);
+    return c === 1 ? Math.abs(u - E.uHigh) < 0.2 * (E.uHigh - E.uS) : u < 0.2 * E.uS; };
+  while (!near(z) && t < tMax) { z = rk4(P, z, dt); t += dt; }
+  return t;
+}
+// smallest insult size A along (dm, di), with h(0) fixed, that tips the subject
+function tippingSize(P, E, dir, h0, relTol) {
+  const goesHigh = A => fate(P, E, [A * dir[0], A * dir[1], h0]).c === 1;
+  if (goesHigh(0)) return { A: 0, why: "h(0) alone already leads to the high-dysregulation state" };
+  let lo = 0, hi = 2 * E.uS;
+  while (!goesHigh(hi)) { lo = hi; hi *= 2; if (hi > 1e4) return { A: NaN, why: "no insult in this direction tips the subject" }; }
+  while (hi - lo > relTol * hi) { const mid = 0.5 * (lo + hi); if (goesHigh(mid)) hi = mid; else lo = mid; }
+  return { A: 0.5 * (lo + hi) };
+}
+
+
+function dhillP(z, k, n) { if (z <= 0) return 0; const zn = Math.pow(z, n), kn = Math.pow(k, n);
+  return n * kn * Math.pow(z, n - 1) / ((kn + zn) * (kn + zn)); }
+function gatingText(P, E) {
+  const a = P.b * dhillP(E.uS, K, N) - P.a, k = P.eta * dhillP(C * E.uS, KH, NH), e = P.eps;
+  const lam = 0.5 * ((a - e) + Math.sqrt((a - e) * (a - e) + 4 * e * (a + C * k)));
+  return (a < 0 ? "<b>Memory-gated</b>: no tipping point in (m, i) at the saddle."
+                : "<b>Directly gated</b>: m and i can tip by themselves at the saddle.") +
+         ` Escape time 1/λ<sub>+</sub> = ${fmt(1 / lam, 0)} days.`;
+}
+// ------------------------------------------------------------------ state ----
+const S = { gmi: 0.25, gh: 3.0, halfLife: 347, m0: 0, i0: 0, h0: 0, tEnd: 2500, delta: -3, dir: [1.95, 8.65], wide: false };
+let P, E, sim, mapV, mapS, timeS = 0;
+
+const $ = id => document.getElementById(id);
+const fmt = (x, d = 3) => Number.isFinite(x) ? x.toFixed(d) : "–";
+
+function bindPair(key, toVal = v => v, fromVal = v => v, digits = 3) {
+  const r = $(key), nInput = $(key + "_n");
+  const set = v => { r.value = fromVal(v); nInput.value = +(+v).toFixed(digits); };
+  r.addEventListener("input", () => { S[mapKey(key)] = toVal(+r.value); nInput.value = +S[mapKey(key)].toFixed(digits); recompute(); });
+  nInput.addEventListener("change", () => { const v = +nInput.value; if (!Number.isFinite(v)) return; S[mapKey(key)] = v; r.value = fromVal(v); recompute(); });
+  return set;
+}
+const KEYMAP = { gmi: "gmi", gh: "gh", hl: "halfLife", m0: "m0", i0: "i0", h0: "h0", tend: "tEnd" };
+const mapKey = k => KEYMAP[k];
+const setters = {
+  gmi: bindPair("gmi", v => v, v => v, 2),
+  gh: bindPair("gh", v => v, v => v, 2),
+  halfLife: bindPair("hl", v => Math.pow(10, v), v => Math.log10(v), 1),
+  m0: bindPair("m0"), i0: bindPair("i0"), h0: bindPair("h0"),
+  tEnd: bindPair("tend", v => v, v => v, 0),
+};
+function syncInputs() {
+  for (const k of Object.keys(setters)) setters[k](S[k]);
+  $("delta").value = S.delta; $("delta_n").value = Math.pow(10, S.delta).toExponential(0);
+  $("wide").checked = S.wide;
+}
+
+// ------------------------------------------------------------------ compute --
+let pending = false;
+function recompute() {
+  if (pending) return; pending = true;
+  requestAnimationFrame(() => { pending = false; computeAll(); render(); });
+}
+function computeAll() {
+  P = makeParams(S);
+  E = fullEquilibria(P);
+  sim = simulate(P, [S.m0, S.i0, S.h0], S.tEnd);
+  // the fixed map: valleys and saddle for every frozen h
+  const hMax = Math.max(E ? 4 * E.hS : 1, ...sim.h) * 1.05;
+  mapV = { x: [], y: [] }; mapS = { x: [], y: [] };
+  for (let k = 0; k <= 300; k++) {
+    const h = hMax * k / 300, f = frozen(P, h);
+    for (const v of f.valleys) { mapV.x.push(h); mapV.y.push(v); }
+    if (f.saddle !== null) { mapS.x.push(h); mapS.y.push(f.saddle); }
+  }
+  const dirFate = E ? fate(P, E, [S.m0, S.i0, S.h0]) : null;
+  sim.fate = dirFate;
+  $("eqStatus").innerHTML = E
+    ? `Saddle S of the full model: m = i = <b>${fmt(E.uS, 4)}</b>, h = <b>${fmt(E.hS, 4)}</b><br>high-dysregulation state: m = i = ${fmt(E.uHigh, 3)}<br>${gatingText(P, E)}`
+    : `<b>Monostable:</b> with these feedback strengths there is only the low-dysregulation state.`;
+  $("fastNote").style.display = S.halfLife < 30 ? "block" : "none";
+}
+
+// ------------------------------------------------------------------ edge -----
+function placeOnEdge(sign) {
+  if (!E) { $("edgeStatus").textContent = "No saddle, so there is no tipping size."; return; }
+  const nrm = Math.hypot(S.dir[0], S.dir[1]), dir = [S.dir[0] / nrm, S.dir[1] / nrm];
+  const delta = Math.pow(10, S.delta);
+  $("edgeStatus").textContent = "Searching…";
+  setTimeout(() => {
+    const r = tippingSize(P, E, dir, S.h0, delta / 20);
+    if (!Number.isFinite(r.A) || r.A === 0) { $("edgeStatus").textContent = r.why; return; }
+    const A = r.A * (1 + sign * delta);
+    S.m0 = A * dir[0]; S.i0 = A * dir[1];
+    const ts = settleTime(P, E, [S.m0, S.i0, S.h0]);
+    S.tEnd = Math.min(20000, Math.max(400, Math.ceil(1.25 * ts / 50) * 50));
+    $("edgeStatus").textContent = `Tipping size along this direction: ${r.A.toFixed(5)}. Started ${sign > 0 ? "above" : "below"} it by δ = ${delta.toExponential(0)}.`;
+    syncInputs(); computeAll(); render();
+  }, 20);
+}
+
+// ------------------------------------------------------------------ render ---
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const tOf = s => S.tEnd * s * s;           // denser early on
+function stateAt(t) {
+  const T = sim.t; let lo = 0, hi = T.length - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (T[mid] <= t) lo = mid; else hi = mid; }
+  const w = T[hi] > T[lo] ? Math.min(1, Math.max(0, (t - T[lo]) / (T[hi] - T[lo]))) : 0;
+  const L = a => a[lo] + w * (a[hi] - a[lo]);
+  return { m: L(sim.m), i: L(sim.i), h: L(sim.h), k: hi };
+}
+function thin(arr, k, step) { const out = []; for (let j = 0; j <= k; j += step) out.push(arr[j]); out.push(arr[k]); return out; }
+
+function baseLayout(xTitle, yTitle, x, y, rev) {
+  const ink = css("--ink"), grid = css("--grid"), muted = css("--muted");
+  const ax = (title, range) => {
+    const a = { title: { text: title, font: { size: 12 } }, gridcolor: grid, zerolinecolor: grid,
+                linecolor: css("--line"), tickfont: { size: 11, color: muted } };
+    if (range) a.range = range; else a.autorange = true;
+    return a;
+  };
+  return { margin: { l: 56, r: 12, t: 8, b: 40 }, paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+           font: { family: "IBM Plex Sans, system-ui, sans-serif", color: ink, size: 12 },
+           xaxis: ax(xTitle, x), yaxis: ax(yTitle, y), showlegend: true,
+           legend: { font: { size: 10 }, bgcolor: "rgba(0,0,0,0)", orientation: "h", x: 0, y: -0.2, yanchor: "top" },
+           uirevision: rev };
+}
+const CFG = { displaylogo: false, responsive: true, modeBarButtonsToRemove: ["select2d", "lasso2d"] };
+const mk = (sym, size, color, line) => ({ symbol: sym, size, color, line: { color: line || css("--panel"), width: 1.5 } });
+
+function render() {
+  const t = tOf(timeS), z = stateAt(t), F = frozen(P, z.h);
+  const rev = [S.gmi, S.gh, S.halfLife, S.wide, S.tEnd].join("|");
+  const uS = E ? E.uS : 0.25, hS = E ? E.hS : 0.25;
+  const U = S.wide && E && Number.isFinite(E.uHigh) ? 1.15 * E.uHigh : 4 * uS;
+  const colors = { s: css("--subject"), sd: css("--saddle"), v: css("--valley"), fx: css("--fixed"),
+                   mem: css("--memory"), out: css("--outflow"), mut: css("--muted") };
+  const step = Math.max(1, Math.floor(z.k / 1500));
+  const pathM = thin(sim.m, z.k, step), pathI = thin(sim.i, z.k, step), pathH = thin(sim.h, z.k, step);
+
+  // clock
+  $("tlabel").textContent = `t = ${t.toFixed(t < 10 ? 1 : 0)} d`;
+  const fateTxt = !E ? "" : sim.fate.c === 1 ? "this subject goes to the high-dysregulation state" : "this subject returns to the low-dysregulation state";
+  $("fate").textContent = `memory h = ${z.h.toFixed(3)}${fateTxt ? ";  " + fateTxt : ""}`;
+
+  // A
+  const u = Array.from({ length: 300 }, (_, k) => U * k / 299);
+  const nullM = u.map(y => (P.b * hill(y, K, N) + F.push) / P.a), nullI = nullM;
+  const nullM0 = u.map(y => P.b * hill(y, K, N) / P.a);
+  const A = [
+    { x: nullM0, y: u, mode: "lines", line: { color: "#2e9d5b", width: 1 }, opacity: 0.3, showlegend: false, hoverinfo: "skip" },
+    { x: u, y: nullM0, mode: "lines", line: { color: "#e08a1e", width: 1 }, opacity: 0.3, showlegend: false, hoverinfo: "skip" },
+    { x: nullM, y: u, mode: "lines", name: "dm/dt = 0", line: { color: "#2e9d5b", width: 2.5 } },
+    { x: u, y: nullI, mode: "lines", name: "di/dt = 0", line: { color: "#e08a1e", width: 2.5 } },
+    { x: pathM, y: pathI, mode: "lines", name: "path so far", line: { color: colors.mut, width: 1 } },
+    { x: F.valleys, y: F.valleys, mode: "markers", name: "valleys", marker: mk("circle", 11, colors.v, colors.fx) },
+  ];
+  if (E) A.push({ x: [uS], y: [uS], mode: "markers", name: "saddle S of the full model (fixed)", marker: mk("x-thin", 14, colors.fx, colors.fx) });
+  if (F.saddle !== null) A.push({ x: [F.saddle], y: [F.saddle], mode: "markers", name: "tipping point of this landscape", marker: mk("x", 15, colors.sd, colors.fx) });
+  A.push({ x: [z.m], y: [z.i], mode: "markers", name: "subject", marker: mk("circle", 12, colors.s) });
+  const LA = baseLayout("m (dysbiosis)", "i (immune dysregulation)", [0, U], [0, U], rev);
+  LA.yaxis.scaleanchor = "x"; LA.xaxis.constrain = "domain"; LA.yaxis.constrain = "domain"; LA.annotations = F.saddle === null ? [{ text: "no tipping point in this landscape", xref: "paper", yref: "paper", x: 0.98, y: 0.04, showarrow: false, font: { color: colors.sd } }] : [];
+  Plotly.react("pA", A, LA, CFG);
+
+  // B
+  const F0 = u.map(x => -P.a * x + P.b * hill(x, K, N));
+  const F1 = F0.map(f => f + F.push);
+  const fmin = Math.min(...F0), fmax = Math.max(...F0);
+  const bot = 1.3 * fmin, top = Math.max(fmax, 0) + 0.9 * Math.abs(fmin);
+  const head = F0.slice(0, Math.floor(0.6 * F0.length)), jMin = head.indexOf(Math.min(...head.slice(5))) ;
+  const B = [
+    { x: [0, U], y: [0, 0], mode: "lines", line: { color: colors.fx, width: 1 }, showlegend: false, hoverinfo: "skip" },
+    { x: u, y: F0, mode: "lines", name: "memory h = 0", line: { color: colors.mut, width: 1.5, dash: "dash" } },
+    { x: u, y: F1, mode: "lines", name: `memory h = ${z.h.toFixed(3)}`, line: { color: colors.s, width: 2.5 } },
+    { x: F.valleys, y: F.valleys.map(() => 0), mode: "markers", name: "valleys", marker: mk("circle", 11, colors.v, colors.fx) },
+  ];
+  if (F.saddle !== null) B.push({ x: [F.saddle], y: [0], mode: "markers", name: "tipping point", marker: mk("x", 15, colors.sd, colors.fx) });
+  const LB = baseLayout("u = m = i", "net rate du/dt (per day)", [0, U], [bot, top], rev);
+  LB.annotations = [
+    { x: u[jMin], y: F0[jMin] + F.push, ax: u[jMin], ay: F0[jMin], axref: "x", ayref: "y", showarrow: true, arrowhead: 2, arrowwidth: 2, arrowcolor: colors.s, text: "" },
+    { x: u[jMin], y: F0[jMin] + 0.5 * F.push, xanchor: "left", xshift: 6, showarrow: false, align: "left",
+      text: `lift = η·Φ<sub>h</sub>(h) = ${F.push.toFixed(4)}<br>the same at every u`, font: { color: colors.s, size: 11 } },
+    { x: 0.99, y: 0.97, xref: "paper", yref: "paper", xanchor: "right", showarrow: false, text: "above 0: u grows", font: { color: colors.mut, size: 11 } },
+    { x: 0.99, y: 0.03, xref: "paper", yref: "paper", xanchor: "right", showarrow: false, text: "below 0: u shrinks", font: { color: colors.mut, size: 11 } },
+  ];
+  Plotly.react("pB", B, LB, CFG);
+
+  // C
+  const stepAll = Math.max(1, Math.floor(sim.t.length / 1500)), last = sim.t.length - 1;
+  const tt = thin(sim.t, last, stepAll), hh = thin(sim.h, last, stepAll);
+  const mm = thin(sim.m, last, stepAll), ii = thin(sim.i, last, stepAll);
+  const inflow = tt.map((_, j) => P.gam * (mm[j] + ii[j]));
+  const outflow = hh.map(x => P.eps * x);
+  const L1 = baseLayout("", "rate", [0, S.tEnd], null, rev);
+  L1.margin.b = 6; L1.xaxis.showticklabels = false; L1.legend = { font: { size: 10 }, x: 0.01, y: 0.99, bgcolor: "rgba(0,0,0,0)" };
+  L1.shapes = [{ type: "line", x0: t, x1: t, y0: 0, y1: 1, yref: "paper", line: { color: colors.s, width: 1.5 } }];
+  Plotly.react("pC1", [
+    { x: tt, y: outflow, mode: "lines", name: "outflow ε·h", line: { color: colors.out, width: 2 } },
+    { x: tt, y: inflow, mode: "lines", name: "inflow γ(m + i)", line: { color: colors.mem, width: 2 }, fill: "tonexty", fillcolor: "rgba(106,61,154,0.12)" },
+  ], L1, CFG);
+  const L2 = baseLayout("time (days)", "memory h", [0, S.tEnd], null, rev);
+  L2.margin.t = 4; L2.legend = { font: { size: 10 }, x: 0.01, y: 0.99, bgcolor: "rgba(0,0,0,0)" };
+  L2.shapes = [{ type: "line", x0: t, x1: t, y0: 0, y1: 1, yref: "paper", line: { color: colors.s, width: 1.5 } }];
+  const C2 = [{ x: tt, y: hh, mode: "lines", name: "h(t)", line: { color: colors.fx, width: 2 } },
+              { x: [t], y: [z.h], mode: "markers", showlegend: false, marker: mk("circle", 10, colors.s) }];
+  if (E) C2.push({ x: [0, S.tEnd], y: [hS, hS], mode: "lines", name: "h = h<sub>S</sub>", line: { color: colors.sd, dash: "dot", width: 1.5 } });
+  Plotly.react("pC2", C2, L2, CFG);
+
+  // D
+  const HV = S.wide ? Math.max(...mapV.x) : 3 * hS;
+  const D = [
+    { x: mapV.x, y: mapV.y, mode: "markers", name: "valleys for each h", marker: { size: 3.5, color: colors.v } },
+    { x: mapS.x, y: mapS.y, mode: "markers", name: "tipping point for each memory level", marker: { size: 3.5, color: colors.sd } },
+    { x: [0, 10], y: [0, 10 / C], mode: "lines", name: "h stops changing (h = c·u)", line: { color: colors.mut, dash: "dot", width: 1 } },
+    { x: [z.h, z.h], y: [0, 100], mode: "lines", name: "current h", line: { color: colors.mut, dash: "dash", width: 1.5 } },
+    { x: pathH, y: pathM.map((m, j) => 0.5 * (m + pathI[j])), mode: "lines", name: "path, u = (m + i)/2", line: { color: colors.mut, width: 1 } },
+  ];
+  if (E) D.push({ x: [hS], y: [uS], mode: "markers", name: "saddle S of the full model (fixed)", marker: mk("x-thin", 14, colors.fx, colors.fx) });
+  if (F.saddle !== null) D.push({ x: [z.h], y: [F.saddle], mode: "markers", name: "tipping point at current memory", marker: mk("x", 15, colors.sd, colors.fx) });
+  D.push({ x: [z.h], y: [0.5 * (z.m + z.i)], mode: "markers", name: "subject", marker: mk("circle", 12, colors.s) });
+  const LD = baseLayout("memory h", "u = m = i", [0, HV], [0, U], rev);
+  LD.annotations = mapS.x.length ? [] : [{ text: "memory-gated: no tipping point in (m, i) at any memory level;<br>the threshold is a level of memory, h ≈ h<sub>S</sub>",
+    xref: "paper", yref: "paper", x: 0.98, y: 0.04, xanchor: "right", yanchor: "bottom", showarrow: false, align: "right", font: { color: colors.sd, size: 11 } }];
+  Plotly.react("pD", D, LD, CFG);
+}
+
+// ------------------------------------------------------------------ wiring ---
+document.querySelectorAll("[data-g]").forEach(b => b.addEventListener("click", () => {
+  [S.gmi, S.gh] = b.dataset.g.split(",").map(Number); syncInputs(); computeAll(); placeOnEdge(+1);
+}));
+document.querySelectorAll("[data-hl]").forEach(b => b.addEventListener("click", () => {
+  S.halfLife = +b.dataset.hl; syncInputs(); computeAll(); placeOnEdge(+1);
+}));
+document.querySelectorAll("[data-dir]").forEach(b => b.addEventListener("click", () => {
+  S.dir = b.dataset.dir.split(",").map(Number);
+  const nrm = Math.hypot(S.m0, S.i0) || 1, d = Math.hypot(S.dir[0], S.dir[1]);
+  S.m0 = nrm * S.dir[0] / d; S.i0 = nrm * S.dir[1] / d; syncInputs(); recompute();
+}));
+["m0", "i0"].forEach(k => $(k).addEventListener("input", () => { if (S.m0 + S.i0 > 0) S.dir = [S.m0, S.i0]; }));
+["m0_n", "i0_n"].forEach(k => $(k).addEventListener("change", () => { if (S.m0 + S.i0 > 0) S.dir = [S.m0, S.i0]; }));
+$("delta").addEventListener("input", () => { S.delta = +$("delta").value; $("delta_n").value = Math.pow(10, S.delta).toExponential(0); });
+$("above").addEventListener("click", () => placeOnEdge(+1));
+$("below").addEventListener("click", () => placeOnEdge(-1));
+$("wide").addEventListener("change", () => { S.wide = $("wide").checked; render(); });
+
+let renderPending = false;
+$("time").addEventListener("input", () => {
+  timeS = +$("time").value;
+  if (renderPending) return; renderPending = true;
+  requestAnimationFrame(() => { renderPending = false; render(); });
+});
+let playing = null;
+$("play").addEventListener("click", () => {
+  if (playing) { cancelAnimationFrame(playing); playing = null; $("play").textContent = "Play"; return; }
+  if (timeS >= 1) timeS = 0;
+  $("play").textContent = "Pause";
+  let last = performance.now();
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const tick = now => {
+    timeS = Math.min(1, timeS + (now - last) / (reduce ? 6000 : 14000)); last = now;
+    $("time").value = timeS; render();
+    if (timeS < 1) playing = requestAnimationFrame(tick);
+    else { playing = null; $("play").textContent = "Play"; }
+  };
+  playing = requestAnimationFrame(tick);
+});
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+
+// start: main-text setting (memory-gated), persistent memory, subject 1 just above its tipping size
+syncInputs(); computeAll(); placeOnEdge(+1);
+</script>
+</body>
+</html>
